@@ -162,4 +162,4 @@ async def get_event_screenshot(
     if not event.screenshot:
         raise HTTPException(status_code=404, detail="Screenshot not found for this event")
 
-    return Response(content=event.screenshot, media_type="image/png")
+    return Response(content=event.screenshot, media_type="image/jpeg")
