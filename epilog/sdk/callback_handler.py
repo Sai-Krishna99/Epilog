@@ -1,6 +1,7 @@
 """LangChain Callback Handler for Epilog."""
 
 import asyncio
+import base64
 import logging
 import time
 from datetime import datetime
@@ -12,6 +13,7 @@ from langchain_core.messages import BaseMessage
 from langchain_core.outputs import LLMResult
 
 from epilog.sdk.client import EpilogClient
+from epilog.sdk.screenshot import ScreenshotCapture, compress_image
 
 logger = logging.getLogger("epilog.sdk.callbacks")
 
@@ -33,6 +35,7 @@ class EpilogCallbackHandler(AsyncCallbackHandler):
         session_name: Optional[str] = None,
         queue_size: int = 1000,
         timeout: float = 5.0,
+        screenshot_capture: Optional[ScreenshotCapture] = None,
     ):
         """Initialize the callback handler.
 
@@ -41,10 +44,12 @@ class EpilogCallbackHandler(AsyncCallbackHandler):
             session_name: Optional name for the session
             queue_size: Maximum number of events to buffer
             timeout: API request timeout
+            screenshot_capture: Optional ScreenshotCapture instance for visual artifacts
         """
         self.client = EpilogClient(api_base_url, timeout=timeout)
         self.session_name = session_name
         self.session_id: Optional[UUID] = None
+        self.screenshot_capture = screenshot_capture
         
         self.queue: asyncio.Queue = asyncio.Queue(maxsize=queue_size)
         self.worker_task: Optional[asyncio.Task] = None
@@ -113,12 +118,11 @@ class EpilogCallbackHandler(AsyncCallbackHandler):
         event_type: str, 
         run_id: UUID, 
         parent_run_id: Optional[UUID], 
-        data: Dict[str, Any]
+        data: Dict[str, Any],
+        screenshot_base64: Optional[str] = None,
     ):
         """Safely enqueue an event into the buffered queue."""
         if not self.session_id:
-            # If session isn't started, we can't send. 
-            # In a real app, user should await start_session().
             return
 
         event = {
@@ -128,6 +132,7 @@ class EpilogCallbackHandler(AsyncCallbackHandler):
             "event_type": event_type,
             "timestamp": datetime.utcnow().isoformat(),
             "event_data": data,
+            "screenshot_base64": screenshot_base64,
         }
 
         try:
@@ -149,6 +154,63 @@ class EpilogCallbackHandler(AsyncCallbackHandler):
         if self.queue.empty():
             return
         await self.queue.join()
+
+    # --- Epilog Helpers ---
+
+    async def capture_screenshot(
+        self, 
+        url: Optional[str] = None, 
+        page: Any = None, 
+        full_page: bool = False
+    ) -> Optional[str]:
+        """Capture a screenshot from a URL or Page object.
+
+        Returns:
+            Base64 encoded string or None if failed
+        """
+        if not self.screenshot_capture:
+            return None
+
+        try:
+            if page:
+                screenshot_bytes = await self.screenshot_capture.capture_page(
+                    page, full_page=full_page
+                )
+            elif url:
+                screenshot_bytes = await self.screenshot_capture.capture_url(
+                    url, full_page=full_page
+                )
+            else:
+                return None
+
+            return base64.b64encode(screenshot_bytes).decode("utf-8")
+        except Exception as e:
+            logger.error(f"Screenshot capture failed: {e}")
+            return None
+
+    async def on_tool_end_with_screenshot(
+        self,
+        output: Any,
+        *,
+        run_id: UUID,
+        parent_run_id: Optional[UUID] = None,
+        url: Optional[str] = None,
+        page: Any = None,
+        full_page: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        """Call this explicitly if you want to capture a screenshot on tool completion."""
+        screenshot_base64 = await self.capture_screenshot(
+            url=url, page=page, full_page=full_page
+        )
+        
+        self._enqueue_event(
+            "tool_end",
+            run_id,
+            parent_run_id,
+            {"output": truncate(output), "importance": "high"},
+            screenshot_base64=screenshot_base64,
+        )
 
     # --- LangChain Callback Methods ---
 

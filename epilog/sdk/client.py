@@ -63,9 +63,12 @@ class EpilogClient:
             The event ID as an integer, or None if ingestion failed
         """
         try:
-            # Note: The event dictionary should already contain session_id, run_id, etc.
-            # Handle screenshot_bytes if present (convert to base64 if needed, 
-            # though the handler should handle this)
+            # Handle screenshot_base64 conversion if bytes were provided in the dict
+            # (Though the handler should ideally handle this, the client is a good safety net)
+            if "screenshot_base64" in event and isinstance(event["screenshot_base64"], bytes):
+                import base64
+                event["screenshot_base64"] = base64.b64encode(event["screenshot_base64"]).decode("utf-8")
+
             response = await self.client.post("/events", json=event)
             response.raise_for_status()
             data = response.json()
