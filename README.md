@@ -69,9 +69,12 @@ from epilog.sdk import EpilogCallbackHandler
 
 # Create the callback handler
 epilog = EpilogCallbackHandler(
-    api_url="http://localhost:8000",
+    api_base_url="http://localhost:8000",
     session_name="my-agent-run"
 )
+
+# Initialize session (Async)
+await epilog.start_session()
 
 # Use with LangChain/LangGraph
 agent.invoke({"input": "your task"}, config={"callbacks": [epilog]})
@@ -130,10 +133,10 @@ Open the dashboard at `http://localhost:3000` to:
 
 ```python
 EpilogCallbackHandler(
-    api_url="http://localhost:8000",  # Epilog API endpoint
-    session_name="my-session",         # Optional session name
-    capture_screenshots=True,          # Enable screenshot capture
-    async_mode=True,                   # Non-blocking event dispatch
+    api_base_url="http://localhost:8000", # Epilog API endpoint
+    session_name="my-session",            # Optional session name
+    queue_size=1000,                      # Max events to buffer
+    screenshot_capture=capture_instance,  # Optional ScreenshotCapture instance
 )
 ```
 
@@ -157,8 +160,8 @@ uv run mypy epilog/
 
 - [x] Trace ingestion API
 - [x] PostgreSQL storage with async SQLAlchemy
-- [ ] SDK callback handler for LangChain/LangGraph
-- [ ] Screenshot capture integration
+- [x] SDK callback handler for LangChain/LangGraph
+- [x] Visual artifact capture (generic & playwright)
 - [ ] Timeline dashboard
 - [ ] Gemini multimodal diagnosis
 - [ ] Patch generation
