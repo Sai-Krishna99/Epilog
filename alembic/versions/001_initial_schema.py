@@ -29,7 +29,7 @@ def upgrade() -> None:
         sa.Column('name', sa.String(length=255), nullable=True),
         sa.Column('started_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('ended_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('status', postgresql.ENUM('running', 'completed', 'failed', name='sessionstatus'), nullable=False),
+        sa.Column('status', postgresql.ENUM('running', 'completed', 'failed', name='sessionstatus', create_type=False), nullable=False),
         sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
