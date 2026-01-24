@@ -22,6 +22,7 @@ dependencies = [
     "alembic>=1.13.0",
     "httpx>=0.27.0",
     "python-multipart>=0.0.9",
+    "langchain-core>=0.3.0",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +31,8 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "black>=24.0.0",
     "ruff>=0.4.0",
+    "respx>=0.21.0",
+    "pytest-timeout>=2.3.0",
 ]
 
 [tool.hatchling.build.targets.wheel]
@@ -42,3 +45,7 @@ target-version = ["py311"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
