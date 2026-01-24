@@ -1,134 +1,176 @@
-# Epilog: The Self-Healing Runtime for AI Agents
+# Epilog
 
-> **Hackathon:** [Gemini 3.0 Hackathon](https://gemini3.devpost.com/)  
-> **Tagline:** "Agents break. Epilog fixes them."  
-> **Status:** Draft v1.0
+**Flight recorder and auto-surgeon for AI agents.** Capture execution traces with screenshots, diagnose failures with multimodal AI, and generate code patches automatically.
 
----
-
-## 1. Executive Summary
-
-**Epilog** is an open-source "Flight Recorder" and "Auto-Surgeon" for Agentic workflows. Unlike traditional tracing tools (LangSmith) that only *show* you the logs, Epilog actively **intercepts** failures, uses **Gemini 1.5 Pro (Multimodal)** to diagnose root causes (analyzing both code and screenshots), and generates verified code patches.
-
-We position Epilog not as a competitor to frameworks like GSD or Ralph, but as the essential **Telemetry & Repair Layer** that makes those high-performance loops reliable.
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
-## 2. Core Architecture: The "Shadow Runtime"
+## Why Epilog?
 
-The system consists of three distinct components:
+When AI agents fail, traditional debuggers show you text logs. But agents operating in visual environments (browsers, GUIs, documents) fail for *visual* reasons that text logs miss entirely.
 
-### A. The Black Box (`epilog-sdk`)
-A lightweight Python SDK that instruments the user's agent.
-*   **Mechanism:** A `CallbackHandler` compatible with LangChain/LangGraph.
-*   **Responsibility:** Streams "Events" (Tools, Thoughts, Outputs) and **Artifacts** (Screenshots, PDF downloads) to the Epilog Core.
-*   **Key Feature:** It captures the *visual state* of the agent (e.g., screenshots of the browser) alongside the text logs.
+**Epilog captures what your agent *saw*, not just what it *said*.**
 
-### B. The Operating Room (`epilog-core`)
-The backend brain powered by **Gemini 1.5 Pro**.
-*   **Engine:** FastAPI + LangGraph.
-*   **The "Doctor Squad":** A multi-agent system that wakes up only when a run fails.
-    1.  **Triage Agent:** Scans the massive JSON trace (using Gemini's 2M context) to locate the drift.
-    2.  **Visual Coroner:** Compares the agent's "Thought" vs. the "Screenshot" (e.g., *Agent said 'clicked login', but Screenshot shows a 404 error*).
-    3.  **PatchSmith:** Reads the user's source code and generates a Git Patch to fix the logic.
-    4.  **Simulant (Optional):** Spins up a sandbox (Docker/E2B) to verify the patch.
+| Traditional Debuggers | Epilog |
+|----------------------|--------|
+| Text logs only | Screenshots + logs |
+| Manual log reading | AI-powered diagnosis |
+| "Figure it out yourself" | Generated code patches |
 
-### C. The HUD (`epilog-web`)
-A "SpaceX-style" Mission Control dashboard.
-*   **Stack:** Next.js + React Flow + ShadCN UI.
-*   **Key View:** A scrubbing timeline that visualizes the agent's execution graph, allowing "Time Travel" to any previous state.
+## Features
 
----
+- **Trace Capture** — Record agent execution events (tool calls, thoughts, outputs) via LangChain/LangGraph callback handler
+- **Screenshot Recording** — Capture visual state alongside text logs
+- **Timeline Dashboard** — Scrub through execution history and see screenshots at each step
+- **Multimodal Diagnosis** — Gemini analyzes failures by comparing what the agent "thought" vs what the screenshot "shows"
+- **Patch Generation** — Get unified diff patches to fix the root cause
 
-## 3. Data Protocol: The Universal Trace Schema
+## Quick Start
 
-We define a strict schema to allow swappable models later, though we optimize for Gemini 3 now.
+### Prerequisites
 
-```jsonc
-// stored in events.jsonl
-{
-  "run_id": "uuid-550e8400",
-  "step_index": 42,
-  "timestamp": "2026-01-22T10:00:00Z",
-  "event_type": "tool_end", 
-  "agent_name": "CryptoResearcher",
-  "payload": {
-    "tool": "browser_screenshot",
-    "args": {"url": "https://finance.yahoo.com"},
-    "output": "<binary_image_ref>" 
-  },
-  "context": {
-    "visual_snapshot": "/artifacts/run_550/step_42.png", // Crucial for Gemini Vision
-    "memory_dump": "..." // The agent's STM at this moment
-  },
-  "error": null
-}
+- Python 3.11+
+- PostgreSQL (or Docker)
+- Node.js 18+ (for dashboard)
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/epilog.git
+cd epilog
+
+# Install Python dependencies
+uv sync  # or: pip install -e .
+
+# Start PostgreSQL (if using Docker)
+docker run --name epilog-postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=epilog \
+  -p 5432:5432 -d postgres:16
+
+# Run database migrations
+export DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/epilog"
+uv run alembic upgrade head
+
+# Start the API server
+uv run uvicorn epilog.api.main:app --reload
 ```
 
+The API is now running at `http://localhost:8000`. Check `http://localhost:8000/docs` for the OpenAPI documentation.
+
+### Instrument Your Agent
+
+```python
+from langchain_core.callbacks import BaseCallbackHandler
+from epilog.sdk import EpilogCallbackHandler
+
+# Create the callback handler
+epilog = EpilogCallbackHandler(
+    api_url="http://localhost:8000",
+    session_name="my-agent-run"
+)
+
+# Use with LangChain/LangGraph
+agent.invoke({"input": "your task"}, config={"callbacks": [epilog]})
+
+# Epilog automatically captures:
+# - Tool calls and outputs
+# - LLM thoughts and responses
+# - Screenshots (when using browser tools)
+# - Errors and stack traces
+```
+
+### View Traces
+
+Open the dashboard at `http://localhost:3000` to:
+- Browse trace sessions
+- Scrub through the execution timeline
+- View screenshots at each step
+- Trigger AI diagnosis on failures
+
+## Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Your Agent    │────▶│   Epilog SDK    │────▶│   Epilog API    │
+│  (LangGraph)    │     │ (CallbackHandler)│     │   (FastAPI)     │
+└─────────────────┘     └─────────────────┘     └────────┬────────┘
+                                                         │
+                        ┌─────────────────┐     ┌────────▼────────┐
+                        │    Dashboard    │◀────│   PostgreSQL    │
+                        │    (Next.js)    │     │                 │
+                        └────────┬────────┘     └─────────────────┘
+                                 │
+                        ┌────────▼────────┐
+                        │  Gemini Vision  │
+                        │   (Diagnosis)   │
+                        └─────────────────┘
+```
+
+**Components:**
+
+- **epilog-sdk** — Lightweight callback handler that streams events and screenshots
+- **epilog-api** — FastAPI backend for trace ingestion and storage
+- **epilog-web** — Next.js dashboard with timeline visualization
+- **diagnosis** — Gemini-powered failure analysis and patch generation
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | Required |
+| `GEMINI_API_KEY` | Google AI API key for diagnosis | Required for diagnosis |
+
+### SDK Options
+
+```python
+EpilogCallbackHandler(
+    api_url="http://localhost:8000",  # Epilog API endpoint
+    session_name="my-session",         # Optional session name
+    capture_screenshots=True,          # Enable screenshot capture
+    async_mode=True,                   # Non-blocking event dispatch
+)
+```
+
+## Development
+
+```bash
+# Install dev dependencies
+uv sync --dev
+
+# Run tests
+uv run pytest
+
+# Run linting
+uv run ruff check .
+
+# Run type checking
+uv run mypy epilog/
+```
+
+## Roadmap
+
+- [x] Trace ingestion API
+- [x] PostgreSQL storage with async SQLAlchemy
+- [ ] SDK callback handler for LangChain/LangGraph
+- [ ] Screenshot capture integration
+- [ ] Timeline dashboard
+- [ ] Gemini multimodal diagnosis
+- [ ] Patch generation
+
+## Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on the process for submitting pull requests.
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
+
 ---
 
-## 4. Implementation Roadmap (Phases)
-
-### Phase 1: The Foundation & "The Patient"
-**Goal:** Create a broken agent and the ability to record it.
-1.  **The "Patient" Agent:** Build a LangGraph agent that performs a visual task (e.g., "Go to this URL, screenshot the pricing table, and summarize it").
-    *   *Sabotage:* Make it fail on specific UI layouts (simulating "flaky" web tools).
-2.  **The Recorder SDK:** Implement `EpilogCallbackHandler`.
-    *   Must save logs to a local `sqlite.db` or `jsonl` file.
-    *   Must capture screenshots if the agent yields them.
-
-### Phase 2: The HUD (Visualization)
-**Goal:** See the failure clearly.
-1.  **API:** Build a simple FastAPI endpoint `GET /runs/{id}` that returns the JSONL.
-2.  **UI:** Build the Next.js frontend.
-    *   Use **React Flow** to render the LangGraph nodes.
-    *   Add a "Timeline Scrubber" at the bottom.
-    *   **Success Criteria:** You can drag the slider and see the screenshot change from Step 1 to Step 10.
-
-### Phase 3: The Doctor (Gemini Integration)
-**Goal:** The "One-Click Fix."
-1.  **The Diagnosis Node:**
-    *   Ingest the *entire* trace (text + images) into Gemini 1.5 Pro.
-    *   Prompt: *"Analyze this failure. Correlate the visual snapshot at Step X with the error at Step Y."*
-2.  **The Patch Node:**
-    *   Give Gemini read-access to the "Patient's" source code (`agent.py`).
-    *   Prompt: *"Write a unified diff patch to handle this edge case."*
-3.  **UI Integration:** Display the Diagnosis and the Code Diff side-by-side in the HUD.
-
-### Phase 4: The Loop (Advanced/Optional)
-**Goal:** Prove the fix works.
-1.  **Integration with E2B (or local Docker):**
-    *   Epilog spins up a container.
-    *   Applies the patch.
-    *   Re-runs the failing input.
-    *   Reports: "Fix Verified: Passing."
-
----
-
-## 5. Technology Stack
-
-*   **LLM:** **Gemini 1.5 Pro** (Primary Reasoning & Vision), **Gemini Flash** (Fast Triage).
-*   **Orchestration:** **LangGraph** (Python).
-*   **Backend:** FastAPI, Python 3.11+.
-*   **Frontend:** Next.js 14, React Flow, TailwindCSS, ShadCN/UI.
-*   **Storage:** SQLite (MVP), Postgres (Production).
-*   **Sandboxing:** E2B SDK (for executing fixes safely).
-
----
-
-## 6. Competitive Advantage (The Pitch)
-
-| Feature | Standard Debuggers (LangSmith) | **Epilog** |
-| :--- | :--- | :--- |
-| **Context** | Single Step | **Full History (1M+ Tokens)** |
-| **Modality** | Text Only | **Multimodal (Screenshots/PDFs)** |
-| **Action** | Passive Logging | **Active Auto-Fixing** |
-| **Workflow** | Human reads logs | **AI writes patches** |
-
----
-
-## 7. Hackathon Strategy Checklist
-
-- [ ] **Leverage Long Context:** We must feed the *whole* log to Gemini, not chunks. This is a specific Gemini advantage.
-- [ ] **Show, Don't Tell:** The demo must show a **Visual** failure (e.g., a website popup blocking the agent) that a text-only debugger would miss.
-- [ ] **Open Source Ready:** The architecture uses standard interfaces (`CallbackHandler`), making it easy for others to adopt.
+**Agents break. Epilog fixes them.**
