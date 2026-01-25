@@ -1,11 +1,14 @@
 """Trace ingestion and query endpoints."""
 
+import asyncio
 import base64
-from typing import List
+import json
+from datetime import datetime
+from typing import AsyncGenerator, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -163,3 +166,64 @@ async def get_event_screenshot(
         raise HTTPException(status_code=404, detail="Screenshot not found for this event")
 
     return Response(content=event.screenshot, media_type="image/jpeg")
+
+
+@router.get("/sessions/{session_id}/events/stream")
+async def stream_session_events(
+    session_id: UUID,
+    db_factory=Depends(lambda: get_db),
+) -> StreamingResponse:
+    """Stream events for a specific session using Server-Sent Events (SSE)."""
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        last_event_id = 0
+        
+        # Initial check to see if session exists
+        async for db in db_factory():
+            result = await db.execute(select(TraceSession).where(TraceSession.id == session_id))
+            if not result.scalar_one_or_none():
+                yield f"data: {json.dumps({'error': 'Session not found'})}\n\n"
+                return
+
+        while True:
+            try:
+                async for db in db_factory():
+                    # Query for new events since last_event_id
+                    stmt = (
+                        select(TraceEvent)
+                        .where(TraceEvent.session_id == session_id)
+                        .where(TraceEvent.id > last_event_id)
+                        .order_by(TraceEvent.id.asc())
+                    )
+                    result = await db.execute(stmt)
+                    events = result.scalars().all()
+
+                    for event in events:
+                        last_event_id = event.id
+                        # Prepare data for SSE
+                        data = {
+                            "id": event.id,
+                            "run_id": str(event.run_id),
+                            "event_type": event.event_type,
+                            "timestamp": event.timestamp.isoformat(),
+                            "event_data": event.event_data,
+                            "has_screenshot": event.screenshot is not None,
+                        }
+                        yield f"data: {json.dumps(data)}\n\n"
+
+                # Keep-alive heartbeats every 15 seconds if no new data
+                # Or just sleep for a bit to poll
+                await asyncio.sleep(1.0)
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream",
+        },
+    )
