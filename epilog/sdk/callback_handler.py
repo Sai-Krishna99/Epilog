@@ -130,7 +130,7 @@ class EpilogCallbackHandler(AsyncCallbackHandler):
             "run_id": str(run_id),
             "parent_run_id": str(parent_run_id) if parent_run_id else None,
             "event_type": event_type,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "event_data": data,
             "screenshot_base64": screenshot_base64,
         }
@@ -302,6 +302,7 @@ class EpilogCallbackHandler(AsyncCallbackHandler):
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
+        screenshot_base64: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         self._enqueue_event(
@@ -309,6 +310,7 @@ class EpilogCallbackHandler(AsyncCallbackHandler):
             run_id,
             parent_run_id,
             {"output": truncate(output), "importance": "high"},
+            screenshot_base64=screenshot_base64,
         )
 
     async def on_tool_error(
@@ -317,6 +319,7 @@ class EpilogCallbackHandler(AsyncCallbackHandler):
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
+        screenshot_base64: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         self._enqueue_event(
@@ -328,6 +331,7 @@ class EpilogCallbackHandler(AsyncCallbackHandler):
                 "error_type": type(error).__name__,
                 "importance": "critical",
             },
+            screenshot_base64=screenshot_base64,
         )
 
     async def on_llm_start(

@@ -58,3 +58,25 @@ class TraceEventResponse(BaseModel):
     model_config = {
         "from_attributes": True,
     }
+
+
+class DiagnosisReportSchema(BaseModel):
+    incident_summary: str
+    visual_mismatch_identified: bool
+    explanation: str
+    suggested_fix_logic: str
+
+
+class DiagnosisResponse(BaseModel):
+    diagnosis: DiagnosisReportSchema
+    patch: Optional[str] = None
+
+
+class ApplyPatchRequest(BaseModel):
+    file_path: str
+    diff_content: str
+
+
+class ApplyPatchResponse(BaseModel):
+    success: bool
+    message: str

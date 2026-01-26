@@ -43,6 +43,16 @@ class TraceSession(Base):
         Index("ix_trace_sessions_started_at", "started_at"),
         Index("ix_trace_sessions_status", "status"),
     )
+    
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "name": self.name,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+            "status": self.status.value if self.status else None,
+            "metadata": self.session_metadata
+        }
 
 
 class TraceEvent(Base):
@@ -70,3 +80,15 @@ class TraceEvent(Base):
         Index("ix_trace_events_timestamp", "timestamp"),
         Index("ix_trace_events_event_data", "event_data", postgresql_using="gin"),
     )
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": str(self.session_id),
+            "run_id": str(self.run_id),
+            "parent_run_id": str(self.parent_run_id) if self.parent_run_id else None,
+            "event_type": self.event_type,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "event_data": self.event_data,
+            "has_screenshot": self.screenshot is not None
+        }

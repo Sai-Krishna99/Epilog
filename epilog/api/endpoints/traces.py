@@ -13,15 +13,80 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from epilog.api.dependencies import get_db
+from epilog.db.session import settings
+import os
 from epilog.api.schemas import (
     TraceEventCreate,
     TraceEventResponse,
     TraceSessionCreate,
     TraceSessionResponse,
+    DiagnosisResponse,
+    ApplyPatchRequest,
+    ApplyPatchResponse,
 )
+from epilog.api.services.diagnosis.provider import BaseDiagnosisProvider
+from epilog.api.services.diagnosis.gemini_provider import GeminiProvider
+from epilog.api.services.diagnosis.engine import DiagnosisEngine
+from epilog.api.services.patch_applier import PatchApplier
 from epilog.db.models import TraceEvent, TraceSession
 
 router = APIRouter()
+
+
+def get_diagnosis_engine() -> DiagnosisEngine:
+    api_key = settings.google_api_key
+    if not api_key:
+        provider = None
+    else:
+        provider = GeminiProvider(api_key=api_key)
+    
+    return DiagnosisEngine(provider) if provider else None
+
+
+@router.post("/events/{event_id}/diagnose", response_model=DiagnosisResponse)
+async def diagnose_event(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+    engine: Optional[DiagnosisEngine] = Depends(get_diagnosis_engine),
+):
+    """Trigger AI diagnosis for a specific event."""
+    if not engine:
+        raise HTTPException(
+            status_code=500, 
+            detail="Diagnosis engine not configured. Please set GOOGLE_API_KEY."
+        )
+    
+    try:
+        result = await engine.run_diagnosis(db, event_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Diagnosis failed: {str(e)}")
+
+
+@router.post("/apply-patch", response_model=ApplyPatchResponse)
+async def apply_patch(
+    request: ApplyPatchRequest,
+):
+    """Apply a generated code patch to the local filesystem."""
+    project_root = settings.epilog_project_path
+    if not project_root:
+        raise HTTPException(
+            status_code=500, 
+            detail="EPILOG_PROJECT_PATH not set. Cannot apply patch."
+        )
+
+    success = PatchApplier.apply_patch(
+        project_root=project_root,
+        file_path=request.file_path,
+        diff_content=request.diff_content
+    )
+
+    if success:
+        return ApplyPatchResponse(success=True, message="Patch applied successfully.")
+    else:
+        return ApplyPatchResponse(success=False, message="Failed to apply patch.")
 
 
 @router.post("/sessions", response_model=TraceSessionResponse, status_code=201)

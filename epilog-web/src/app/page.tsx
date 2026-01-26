@@ -12,12 +12,23 @@ import {
   ChevronRight,
   Loader2,
   History,
-  Layers
+  Layers,
+  Zap,
+  Check,
+  FileCode,
+  X
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
 import { Card } from "@/components/ui/card";
-import { useSessions, useTraceStream, TraceEvent } from "@/lib/api";
+import {
+  useSessions,
+  useTraceStream,
+  TraceEvent,
+  useDiagnose,
+  useApplyPatch,
+  DiagnosisResponse
+} from "@/lib/api";
 
 export default function Dashboard() {
   const { data: sessions, isLoading: sessionsLoading } = useSessions();
@@ -26,19 +37,24 @@ export default function Dashboard() {
   const { events } = useTraceStream(selectedSessionId);
   const [scrubberValue, setScrubberValue] = useState([0]);
 
+  // AI Diagnosis State
+  const [activeDiagnosis, setActiveDiagnosis] = useState<DiagnosisResponse | null>(null);
+  const [diagnosingEventId, setDiagnosingEventId] = useState<number | null>(null);
+
+  const { mutate: runDiagnose, isPending: isDiagnosing } = useDiagnose();
+  const { mutate: applyPatch, isPending: isApplyingPatch, isSuccess: patchApplied } = useApplyPatch();
+
   const activeSession = useMemo(() =>
     sessions?.find(s => s.id === selectedSessionId),
     [sessions, selectedSessionId]
   );
 
-  // Sync scrubber to 100% when new events arrive and it was already at 100%
   useEffect(() => {
     if (scrubberValue[0] === 100 || events.length === 1) {
       setScrubberValue([100]);
     }
   }, [events.length]);
 
-  // Determine the current event based on the scrubber
   const currentEventIndex = events.length === 0 ? -1 : Math.min(
     Math.floor((scrubberValue[0] / 100) * (events.length - 1)),
     events.length - 1
@@ -50,13 +66,37 @@ export default function Dashboard() {
     ? `http://localhost:8000/api/v1/traces/events/${currentEvent.id}/screenshot`
     : null;
 
+  const handleDiagnose = (eventId: number) => {
+    setDiagnosingEventId(eventId);
+    runDiagnose(eventId, {
+      onSuccess: (data) => {
+        setActiveDiagnosis(data);
+        setDiagnosingEventId(null);
+      },
+      onError: () => {
+        setDiagnosingEventId(null);
+      }
+    });
+  };
+
+  const handleApplyPatch = () => {
+    if (!activeDiagnosis?.patch) return;
+
+    // For demo, we assume agent.py if not specified
+    // In real app, AI would provide the file path
+    applyPatch({
+      file_path: "agent.py",
+      diff_content: activeDiagnosis.patch
+    });
+  };
+
   return (
     <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
-      {/* Sidebar: Navigation & Sessions */}
+      {/* Sidebar */}
       <aside className="w-64 border-r border-slate-900 flex flex-col bg-black">
         <div className="p-4 flex items-center gap-2 border-b border-slate-900">
           <Terminal className="w-5 h-5 text-white" />
-          <span className="font-bold tracking-tight text-lg uppercase tracking-tighter">EPILOG</span>
+          <span className="font-bold tracking-tight text-lg uppercase tracking-tighter text-white">EPILOG</span>
         </div>
 
         <div className="p-2">
@@ -81,6 +121,7 @@ export default function Dashboard() {
                 onClick={() => {
                   setSelectedSessionId(session.id);
                   setScrubberValue([100]);
+                  setActiveDiagnosis(null);
                 }}
                 className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between group transition-colors ${selectedSessionId === session.id ? "bg-slate-900 text-white" : "text-slate-500 hover:text-white hover:bg-slate-950"
                   }`}
@@ -129,7 +170,7 @@ export default function Dashboard() {
         {/* Workspace: Feed & Preview */}
         <div className="flex-1 flex overflow-hidden">
           {/* Trace Feed */}
-          <div className="w-1/2 border-r border-slate-900 flex flex-col bg-black overflow-hidden">
+          <div className={`border-r border-slate-900 flex flex-col bg-black overflow-hidden transition-all duration-300 ${activeDiagnosis ? 'w-1/3' : 'w-1/2'}`}>
             <ScrollArea className="flex-1">
               <div className="p-6 max-w-2xl mx-auto space-y-8 pb-32">
                 {events.length === 0 ? (
@@ -142,44 +183,140 @@ export default function Dashboard() {
                     key={event.id}
                     active={idx === currentEventIndex}
                     event={event}
+                    onDiagnose={() => handleDiagnose(event.id)}
+                    isDiagnosing={diagnosingEventId === event.id}
                   />
                 ))}
               </div>
             </ScrollArea>
           </div>
 
-          {/* Screenshot Preview */}
-          <div className="w-1/2 bg-black p-8 flex flex-col items-center justify-center relative group">
-            <div className="absolute top-4 left-4 text-[10px] font-mono text-slate-700 uppercase tracking-widest">Visual State</div>
+          {/* Screenshot Preview / Surgery Room */}
+          <div className={`bg-black transition-all duration-300 ${activeDiagnosis ? 'w-2/3 flex flex-row' : 'w-1/2'}`}>
+            {/* Visual State (always visible, but shrinks when diagnosing) */}
+            <div className={`p-8 flex flex-col items-center justify-center relative group ${activeDiagnosis ? 'w-1/2 border-r border-slate-900' : 'w-full'}`}>
+              <div className="absolute top-4 left-4 text-[10px] font-mono text-slate-700 uppercase tracking-widest">Visual State</div>
 
-            <div className="relative w-full max-w-2xl">
-              <Card className="w-full aspect-video bg-black border-slate-800 rounded-none overflow-hidden flex items-center justify-center relative shadow-none">
-                {screenshotUrl ? (
-                  <img src={screenshotUrl} alt="Visual State" className="w-full h-full object-contain" />
-                ) : (
-                  <div className="text-slate-800 font-mono text-sm uppercase tracking-tighter">
-                    {events.length > 0 ? "[ NO VISUAL_DATA ]" : "[ STANDBY ]"}
+              <div className="relative w-full max-w-2xl">
+                <Card className="w-full aspect-video bg-black border-slate-800 rounded-none overflow-hidden flex items-center justify-center relative shadow-none">
+                  {screenshotUrl ? (
+                    <img src={screenshotUrl} alt="Visual State" className="w-full h-full object-contain" />
+                  ) : (
+                    <div className="text-slate-800 font-mono text-sm uppercase tracking-tighter">
+                      {events.length > 0 ? "[ NO VISUAL_DATA ]" : "[ STANDBY ]"}
+                    </div>
+                  )}
+                  <div className="absolute top-2 right-2 px-2 py-1 bg-black/80 border border-slate-800 text-[9px] font-mono text-white">
+                    {currentEvent?.timestamp ? (() => {
+                      const d = new Date(currentEvent.timestamp);
+                      return isNaN(d.getTime()) ? "--:--:--" : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    })() : "--:--:--"}
                   </div>
-                )}
-                <div className="absolute top-2 right-2 px-2 py-1 bg-black/80 border border-slate-800 text-[9px] font-mono text-white">
-                  {currentEvent?.timestamp ? new Date(currentEvent.timestamp).toLocaleTimeString() : "--:--:--"}
+                </Card>
+                <div className="absolute -top-1 -left-1 w-4 h-4 border-t border-l border-white/20" />
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b border-r border-white/20" />
+              </div>
+
+              {!activeDiagnosis && (
+                <div className="mt-8 max-w-lg w-full">
+                  <div className="flex items-center gap-4 text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2 border-b border-slate-900 pb-2">
+                    <span>Metadata</span>
+                    <span className="text-white ml-auto font-mono">
+                      {currentEvent?.run_id ? `run: ${currentEvent.run_id.slice(0, 8)}` : "no active run"}
+                    </span>
+                  </div>
+                  <pre className="text-[10px] text-slate-500 font-mono overflow-auto max-h-32 scrollbar-hide">
+                    {JSON.stringify(currentEvent?.event_data || {}, null, 2)}
+                  </pre>
                 </div>
-              </Card>
-              <div className="absolute -top-1 -left-1 w-4 h-4 border-t border-l border-white/20" />
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b border-r border-white/20" />
+              )}
             </div>
 
-            <div className="mt-8 max-w-lg w-full">
-              <div className="flex items-center gap-4 text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2 border-b border-slate-900 pb-2">
-                <span>Metadata</span>
-                <span className="text-white ml-auto font-mono">
-                  {currentEvent?.run_id ? `run: ${currentEvent.run_id.slice(0, 8)}` : "no active run"}
-                </span>
+            {/* AI Surgery Room Panel */}
+            {activeDiagnosis && (
+              <div className="w-1/2 flex flex-col bg-slate-950/20 overflow-hidden relative">
+                <div className="p-4 border-b border-slate-900 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-white" />
+                    <span className="text-xs font-bold tracking-widest uppercase">Surgery Room</span>
+                  </div>
+                  <button
+                    onClick={() => setActiveDiagnosis(null)}
+                    className="p-1 hover:bg-slate-900 text-slate-500 hover:text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <ScrollArea className="flex-1 p-6">
+                  <div className="space-y-6 max-w-xl mx-auto">
+                    {/* Diagnosis Report */}
+                    <div>
+                      <h5 className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-3">Diagnosis Report</h5>
+                      <div className="p-4 border border-slate-800 bg-black space-y-4">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="w-4 h-4 text-white mt-0.5 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold text-white mb-1 uppercase tracking-tight">{activeDiagnosis.diagnosis.incident_summary}</div>
+                            <p className="text-xs text-slate-400 font-mono leading-relaxed">{activeDiagnosis.diagnosis.explanation}</p>
+                          </div>
+                        </div>
+                        {activeDiagnosis.diagnosis.visual_mismatch_identified && (
+                          <div className="px-2 py-1 bg-white/5 border border-white/10 text-[9px] font-mono text-white inline-block">
+                            VISUAL MISMATCH DETECTED
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Patch View */}
+                    {activeDiagnosis.patch && (
+                      <div className="space-y-3">
+                        <h5 className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Proposed Fix</h5>
+                        <div className="relative group">
+                          <div className="absolute top-2 right-2 flex items-center gap-2">
+                            <span className="text-[9px] font-mono text-slate-600 bg-slate-900 px-1 border border-slate-800">agent.py</span>
+                          </div>
+                          <pre className="p-4 bg-black border border-slate-800 text-[11px] font-mono text-slate-400 overflow-auto max-h-[400px] scrollbar-hide whitespace-pre">
+                            {activeDiagnosis.patch.split('\n').map((line: string, i: number) => (
+                              <div key={i} className={line.startsWith('+') ? 'text-white bg-white/10' : line.startsWith('-') ? 'text-slate-600' : ''}>
+                                {line}
+                              </div>
+                            ))}
+                          </pre>
+                        </div>
+
+                        <button
+                          onClick={handleApplyPatch}
+                          disabled={isApplyingPatch || patchApplied}
+                          className={`w-full py-2 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest transition-all ${patchApplied
+                            ? "bg-white text-black cursor-default"
+                            : "border border-white hover:bg-white hover:text-black disabled:opacity-50"
+                            }`}
+                        >
+                          {isApplyingPatch ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Applying...
+                            </>
+                          ) : patchApplied ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              Patch Applied
+                            </>
+                          ) : (
+                            <>
+                              <FileCode className="w-3 h-3" />
+                              Apply Patch
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
               </div>
-              <pre className="text-[10px] text-slate-500 font-mono overflow-auto max-h-32 scrollbar-hide">
-                {JSON.stringify(currentEvent?.event_data || {}, null, 2)}
-              </pre>
-            </div>
+            )}
           </div>
         </div>
       </main>
@@ -187,7 +324,17 @@ export default function Dashboard() {
   );
 }
 
-function StepCard({ event, active }: { event: TraceEvent, active: boolean }) {
+function StepCard({
+  event,
+  active,
+  onDiagnose,
+  isDiagnosing
+}: {
+  event: TraceEvent,
+  active: boolean,
+  onDiagnose: () => void,
+  isDiagnosing: boolean
+}) {
   const getIcon = (type: string) => {
     const t = type.toLowerCase();
     if (t.includes('tool')) return <Wrench className={`w-4 h-4 ${active ? 'text-white' : 'text-slate-500'}`} />;
@@ -209,6 +356,8 @@ function StepCard({ event, active }: { event: TraceEvent, active: boolean }) {
     return JSON.stringify(data);
   };
 
+  const isError = event.event_type.toLowerCase().includes('error');
+
   return (
     <div className={`group relative pl-8 border-l transition-all duration-200 ${active ? "border-white opacity-100" : "border-slate-800 opacity-70 hover:opacity-100"
       }`}>
@@ -222,12 +371,39 @@ function StepCard({ event, active }: { event: TraceEvent, active: boolean }) {
             {getTitle(event)}
           </h4>
           <span className={`text-[9px] font-mono ${active ? "text-slate-400" : "text-slate-600"}`}>
-            {new Date(event.timestamp).toLocaleTimeString([], { hour12: false })}
+            {(() => {
+              const d = new Date(event.timestamp);
+              return isNaN(d.getTime()) ? "Invalid" : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            })()}
           </span>
         </div>
-        <div className={`p-3 border font-mono text-xs leading-relaxed transition-all ${active ? "border-white/20 bg-white/5 text-slate-100" : "border-slate-900/50 bg-slate-950/20 text-slate-300"
-          } ${event.event_type.toLowerCase().includes('error') ? 'border-red-900/30 text-red-400' : ''}`}>
+        <div className={`group/card relative p-3 border font-mono text-xs leading-relaxed transition-all ${active ? "border-white/20 bg-white/5 text-slate-100" : "border-slate-900/50 bg-slate-950/20 text-slate-300"
+          } ${isError ? 'border-red-900/30 text-red-400' : ''}`}>
           {getContent(event)}
+
+          {/* Action Footer */}
+          <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-end opacity-0 group-hover/card:opacity-100 transition-opacity">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDiagnose();
+              }}
+              disabled={isDiagnosing}
+              className="px-2 py-0.5 border border-white/20 text-[9px] font-bold uppercase transition-all hover:bg-white hover:text-black flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {isDiagnosing ? (
+                <>
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-2.5 h-2.5" />
+                  Diagnose
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

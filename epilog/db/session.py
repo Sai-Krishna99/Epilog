@@ -1,6 +1,6 @@
 """Database session management."""
 
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -9,6 +9,8 @@ from sqlalchemy.orm import sessionmaker
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/epilog"
+    google_api_key: Optional[str] = None
+    epilog_project_path: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
