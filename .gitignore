@@ -15,6 +15,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!epilog-web/src/lib/
 lib64/
 parts/
 sdist/
