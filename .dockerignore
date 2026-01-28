@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+
+# Docs
+*.md
+docs/
+
+# Planning (not needed in container)
+.planning/
+
+# Demo assets (large files)
+demo_assets/
+
+# Environment files (secrets)
+.env
+.env.local
+
+# Node modules (for web, handled separately)
+node_modules/
+
+# Misc
+.DS_Store
+*.log

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 
-const API_BASE_URL = "http://localhost:8000/api/v1/traces";
+const API_BASE_URL = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/traces`;
 
 export interface TraceSession {
     id: string;

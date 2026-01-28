@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: epilog-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: epilog
+    ports:
+      - "5432:5432"
+    volumes:
+      - epilog_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: epilog-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/epilog
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - EPILOG_PROJECT_PATH=${EPILOG_PROJECT_PATH:-/app}
+      - EPILOG_DIAGNOSIS_MODEL=${EPILOG_DIAGNOSIS_MODEL:-gemini-2.0-flash}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head && uvicorn epilog.api.main:app --host 0.0.0.0 --port 8000"
+
+  web:
+    build:
+      context: ./epilog-web
+      dockerfile: Dockerfile
+    container_name: epilog-web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+
+volumes:
+  epilog_postgres_data:
