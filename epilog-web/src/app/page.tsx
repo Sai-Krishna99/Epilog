@@ -101,7 +101,7 @@ export default function Dashboard() {
 
         <div className="p-2">
           <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-500" />
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
             <input
               placeholder="Filter sessions..."
               className="w-full bg-slate-950 border border-slate-900 rounded-none py-1.5 pl-8 text-sm focus:outline-none focus:border-white/50 transition-colors"
@@ -113,7 +113,7 @@ export default function Dashboard() {
           <div className="space-y-1 py-2">
             {sessionsLoading ? (
               <div className="flex justify-center py-8">
-                <Loader2 className="w-4 h-4 animate-spin text-slate-700" />
+                <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
               </div>
             ) : sessions?.map((session) => (
               <button
@@ -123,7 +123,7 @@ export default function Dashboard() {
                   setScrubberValue([100]);
                   setActiveDiagnosis(null);
                 }}
-                className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between group transition-colors ${selectedSessionId === session.id ? "bg-slate-900 text-white" : "text-slate-500 hover:text-white hover:bg-slate-950"
+                className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between group transition-colors border-l-2 ${selectedSessionId === session.id ? "bg-slate-900 text-white border-white" : "text-slate-400 hover:text-white hover:bg-slate-950 border-transparent hover:border-slate-700"
                   }`}
               >
                 <div className="flex items-center gap-2 truncate">
@@ -174,8 +174,8 @@ export default function Dashboard() {
             <ScrollArea className="flex-1">
               <div className="p-6 max-w-2xl mx-auto space-y-8 pb-32">
                 {events.length === 0 ? (
-                  <div className="h-64 flex flex-col items-center justify-center text-slate-800 text-sm font-mono border border-dashed border-slate-900">
-                    <History className="w-8 h-8 mb-2 opacity-20" />
+                  <div className="h-64 flex flex-col items-center justify-center text-slate-500 text-sm font-mono border border-dashed border-slate-700">
+                    <History className="w-8 h-8 mb-2 opacity-40" />
                     Waiting for events...
                   </div>
                 ) : events.map((event, idx) => (
@@ -195,37 +195,37 @@ export default function Dashboard() {
           <div className={`bg-black transition-all duration-300 ${activeDiagnosis ? 'w-2/3 flex flex-row' : 'w-1/2'}`}>
             {/* Visual State (always visible, but shrinks when diagnosing) */}
             <div className={`p-8 flex flex-col items-center justify-center relative group ${activeDiagnosis ? 'w-1/2 border-r border-slate-900' : 'w-full'}`}>
-              <div className="absolute top-4 left-4 text-[10px] font-mono text-slate-700 uppercase tracking-widest">Visual State</div>
+              <div className="absolute top-4 left-4 text-[10px] font-mono text-slate-500 uppercase tracking-widest">Visual State</div>
 
               <div className="relative w-full max-w-2xl">
-                <Card className="w-full aspect-video bg-black border-slate-800 rounded-none overflow-hidden flex items-center justify-center relative shadow-none">
+                <Card className="w-full aspect-video bg-black border-slate-700 rounded-none overflow-hidden flex items-center justify-center relative shadow-none">
                   {screenshotUrl ? (
                     <img src={screenshotUrl} alt="Visual State" className="w-full h-full object-contain" />
                   ) : (
-                    <div className="text-slate-800 font-mono text-sm uppercase tracking-tighter">
+                    <div className="text-slate-500 font-mono text-sm uppercase tracking-tighter">
                       {events.length > 0 ? "[ NO VISUAL_DATA ]" : "[ STANDBY ]"}
                     </div>
                   )}
-                  <div className="absolute top-2 right-2 px-2 py-1 bg-black/80 border border-slate-800 text-[9px] font-mono text-white">
+                  <div className="absolute top-2 right-2 px-2 py-1 bg-black/80 border border-slate-700 text-[9px] font-mono text-white">
                     {currentEvent?.timestamp ? (() => {
                       const d = new Date(currentEvent.timestamp);
                       return isNaN(d.getTime()) ? "--:--:--" : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                     })() : "--:--:--"}
                   </div>
                 </Card>
-                <div className="absolute -top-1 -left-1 w-4 h-4 border-t border-l border-white/20" />
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b border-r border-white/20" />
+                <div className="absolute -top-1 -left-1 w-4 h-4 border-t border-l border-white/30" />
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b border-r border-white/30" />
               </div>
 
               {!activeDiagnosis && (
                 <div className="mt-8 max-w-lg w-full">
-                  <div className="flex items-center gap-4 text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2 border-b border-slate-900 pb-2">
+                  <div className="flex items-center gap-4 text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-800 pb-2">
                     <span>Metadata</span>
                     <span className="text-white ml-auto font-mono">
                       {currentEvent?.run_id ? `run: ${currentEvent.run_id.slice(0, 8)}` : "no active run"}
                     </span>
                   </div>
-                  <pre className="text-[10px] text-slate-500 font-mono overflow-auto max-h-32 scrollbar-hide">
+                  <pre className="text-[10px] text-slate-400 font-mono overflow-auto max-h-32 scrollbar-hide">
                     {JSON.stringify(currentEvent?.event_data || {}, null, 2)}
                   </pre>
                 </div>
@@ -252,17 +252,17 @@ export default function Dashboard() {
                   <div className="space-y-6 max-w-xl mx-auto">
                     {/* Diagnosis Report */}
                     <div>
-                      <h5 className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-3">Diagnosis Report</h5>
-                      <div className="p-4 border border-slate-800 bg-black space-y-4">
+                      <h5 className="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-3">Diagnosis Report</h5>
+                      <div className="p-4 border border-slate-700 bg-black space-y-4">
                         <div className="flex items-start gap-3">
                           <AlertCircle className="w-4 h-4 text-white mt-0.5 shrink-0" />
                           <div>
                             <div className="text-xs font-bold text-white mb-1 uppercase tracking-tight">{activeDiagnosis.diagnosis.incident_summary}</div>
-                            <p className="text-xs text-slate-400 font-mono leading-relaxed">{activeDiagnosis.diagnosis.explanation}</p>
+                            <p className="text-xs text-slate-300 font-mono leading-relaxed">{activeDiagnosis.diagnosis.explanation}</p>
                           </div>
                         </div>
                         {activeDiagnosis.diagnosis.visual_mismatch_identified && (
-                          <div className="px-2 py-1 bg-white/5 border border-white/10 text-[9px] font-mono text-white inline-block">
+                          <div className="px-2 py-1 bg-amber-500/10 border border-amber-500/30 text-[9px] font-mono text-amber-400 inline-block">
                             VISUAL MISMATCH DETECTED
                           </div>
                         )}
@@ -272,14 +272,14 @@ export default function Dashboard() {
                     {/* Patch View */}
                     {activeDiagnosis.patch && (
                       <div className="space-y-3">
-                        <h5 className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Proposed Fix</h5>
+                        <h5 className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">Proposed Fix</h5>
                         <div className="relative group">
                           <div className="absolute top-2 right-2 flex items-center gap-2">
-                            <span className="text-[9px] font-mono text-slate-600 bg-slate-900 px-1 border border-slate-800">agent.py</span>
+                            <span className="text-[9px] font-mono text-slate-400 bg-slate-900 px-1 border border-slate-700">agent.py</span>
                           </div>
-                          <pre className="p-4 bg-black border border-slate-800 text-[11px] font-mono text-slate-400 overflow-auto max-h-[400px] scrollbar-hide whitespace-pre">
+                          <pre className="p-4 bg-black border border-slate-700 text-[11px] font-mono text-slate-300 overflow-auto max-h-[400px] scrollbar-hide whitespace-pre">
                             {activeDiagnosis.patch.split('\n').map((line: string, i: number) => (
-                              <div key={i} className={line.startsWith('+') ? 'text-white bg-white/10' : line.startsWith('-') ? 'text-slate-600' : ''}>
+                              <div key={i} className={line.startsWith('+') ? 'text-green-400 bg-green-500/10' : line.startsWith('-') ? 'text-red-400 bg-red-500/10' : ''}>
                                 {line}
                               </div>
                             ))}
@@ -359,37 +359,37 @@ function StepCard({
   const isError = event.event_type.toLowerCase().includes('error');
 
   return (
-    <div className={`group relative pl-8 border-l transition-all duration-200 ${active ? "border-white opacity-100" : "border-slate-800 opacity-70 hover:opacity-100"
+    <div className={`group relative pl-8 border-l-2 transition-all duration-200 ${active ? "border-white opacity-100" : "border-slate-700 opacity-80 hover:opacity-100"
       }`}>
-      <div className={`absolute -left-2 top-0 p-1 translate-y-[-2px] transition-all ${active ? "bg-black scale-110" : "bg-black"
+      <div className={`absolute -left-2.5 top-0 p-1 translate-y-[-2px] transition-all ${active ? "bg-black scale-110" : "bg-black"
         }`}>
         {getIcon(event.event_type)}
       </div>
       <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <h4 className={`text-[10px] font-bold tracking-widest transition-colors ${active ? "text-white/90" : "text-slate-400"}`}>
+          <h4 className={`text-[10px] font-bold tracking-widest transition-colors ${active ? "text-white" : "text-slate-300"}`}>
             {getTitle(event)}
           </h4>
-          <span className={`text-[9px] font-mono ${active ? "text-slate-400" : "text-slate-600"}`}>
+          <span className={`text-[9px] font-mono ${active ? "text-slate-300" : "text-slate-500"}`}>
             {(() => {
               const d = new Date(event.timestamp);
               return isNaN(d.getTime()) ? "Invalid" : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
             })()}
           </span>
         </div>
-        <div className={`group/card relative p-3 border font-mono text-xs leading-relaxed transition-all ${active ? "border-white/20 bg-white/5 text-slate-100" : "border-slate-900/50 bg-slate-950/20 text-slate-300"
-          } ${isError ? 'border-red-900/30 text-red-400' : ''}`}>
+        <div className={`group/card relative p-3 border font-mono text-xs leading-relaxed transition-all ${active ? "border-white/30 bg-white/5 text-slate-100" : "border-slate-700 bg-slate-950/30 text-slate-300"
+          } ${isError ? 'border-red-800/50 text-red-400' : ''}`}>
           {getContent(event)}
 
           {/* Action Footer */}
-          <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-end opacity-0 group-hover/card:opacity-100 transition-opacity">
+          <div className="mt-3 pt-2 border-t border-slate-800 flex items-center justify-end opacity-0 group-hover/card:opacity-100 transition-opacity">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDiagnose();
               }}
               disabled={isDiagnosing}
-              className="px-2 py-0.5 border border-white/20 text-[9px] font-bold uppercase transition-all hover:bg-white hover:text-black flex items-center gap-1.5 disabled:opacity-50"
+              className="px-2 py-0.5 border border-white/30 text-[9px] font-bold uppercase transition-all hover:bg-white hover:text-black flex items-center gap-1.5 disabled:opacity-50"
             >
               {isDiagnosing ? (
                 <>
