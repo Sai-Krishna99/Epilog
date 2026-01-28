@@ -57,19 +57,38 @@ async def test_engine_windowing_logic():
 @pytest.mark.asyncio
 async def test_gemini_provider_parsing():
     from epilog.api.services.diagnosis.gemini_provider import GeminiProvider
-    
-    with patch("google.genai.Client") as mock_client_class:
-        mock_client = MagicMock()
-        mock_client_class.return_value = mock_client
-        
-        # Mock Response
+    import httpx
+
+    # Mock the httpx response with the format Gemini actually returns
+    mock_response_data = [
+        {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": '{"incident_summary": "Mock Summary", "visual_mismatch_identified": true, "explanation": "Visual mismatch found", "suggested_fix_logic": "Update selector"}'
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+
+    with patch("httpx.AsyncClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
+        # Mock the POST response
         mock_response = MagicMock()
-        mock_response.text = '{"incident_summary": "Mock Summary", "visual_mismatch_identified": true, "explanation": "Visual mismatch found", "suggested_fix_logic": "Update selector"}'
-        mock_client.models.generate_content.return_value = mock_response
-        
+        mock_response.status_code = 200
+        mock_response.json.return_value = mock_response_data
+        mock_client.post.return_value = mock_response
+
         provider = GeminiProvider(api_key="fake-key")
-        
+
         report = await provider.diagnose(events=[], target_event={})
-        
+
         assert report.incident_summary == "Mock Summary"
         assert report.visual_mismatch_identified is True
