@@ -33,6 +33,7 @@ import {
 export default function Dashboard() {
   const { data: sessions, isLoading: sessionsLoading } = useSessions();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { events } = useTraceStream(selectedSessionId);
   const [scrubberValue, setScrubberValue] = useState([0]);
@@ -43,6 +44,15 @@ export default function Dashboard() {
 
   const { mutate: runDiagnose, isPending: isDiagnosing } = useDiagnose();
   const { mutate: applyPatch, isPending: isApplyingPatch, isSuccess: patchApplied } = useApplyPatch();
+
+  const filteredSessions = useMemo(() => {
+    if (!sessions) return [];
+    if (!searchQuery.trim()) return sessions;
+    const query = searchQuery.toLowerCase();
+    return sessions.filter(s =>
+      (s.name || "").toLowerCase().includes(query)
+    );
+  }, [sessions, searchQuery]);
 
   const activeSession = useMemo(() =>
     sessions?.find(s => s.id === selectedSessionId),
@@ -104,6 +114,8 @@ export default function Dashboard() {
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
             <input
               placeholder="Filter sessions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-slate-950 border border-slate-900 rounded-none py-1.5 pl-8 text-sm focus:outline-none focus:border-white/50 transition-colors"
             />
           </div>
@@ -115,7 +127,11 @@ export default function Dashboard() {
               <div className="flex justify-center py-8">
                 <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
               </div>
-            ) : sessions?.map((session) => (
+            ) : filteredSessions.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 text-sm font-mono">
+                {searchQuery ? "No matching sessions" : "No sessions yet"}
+              </div>
+            ) : filteredSessions.map((session) => (
               <button
                 key={session.id}
                 onClick={() => {
