@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Component, ReactNode } from "react";
 import {
   Terminal,
   Search,
@@ -16,8 +16,14 @@ import {
   Zap,
   Check,
   FileCode,
-  X
+  X,
+  RefreshCw,
+  Camera,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
 import { Card } from "@/components/ui/card";
@@ -30,8 +36,63 @@ import {
   DiagnosisResponse
 } from "@/lib/api";
 
-export default function Dashboard() {
-  const { data: sessions, isLoading: sessionsLoading } = useSessions();
+// Error Boundary Component
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-screen bg-black text-white flex items-center justify-center">
+          <div className="text-center space-y-4 max-w-md">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto" />
+            <h1 className="text-lg font-bold uppercase tracking-wider">Something went wrong</h1>
+            <p className="text-sm text-slate-400 font-mono">{this.state.error?.message}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 border border-white text-xs font-bold uppercase tracking-wider hover:bg-white hover:text-black transition-colors"
+            >
+              <RefreshCw className="w-3 h-3 inline mr-2" />
+              Reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Skeleton Loader for Sessions (deterministic widths to avoid hydration mismatch)
+const SKELETON_WIDTHS = [65, 80, 70, 85, 75];
+
+function SessionSkeleton() {
+  return (
+    <div className="space-y-1 py-2 animate-pulse">
+      {SKELETON_WIDTHS.map((width, i) => (
+        <div key={i} className="px-3 py-2 flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-slate-800" />
+          <div className="h-4 bg-slate-800 rounded flex-1" style={{ width: `${width}%` }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DashboardContent() {
+  const { data: sessions, isLoading: sessionsLoading, error: sessionsError, refetch: refetchSessions } = useSessions();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -42,8 +103,21 @@ export default function Dashboard() {
   const [activeDiagnosis, setActiveDiagnosis] = useState<DiagnosisResponse | null>(null);
   const [diagnosingEventId, setDiagnosingEventId] = useState<number | null>(null);
 
-  const { mutate: runDiagnose, isPending: isDiagnosing } = useDiagnose();
+  const { mutate: runDiagnose, isPending: isDiagnosing, error: diagnoseError, reset: resetDiagnoseError } = useDiagnose();
+  const [diagnoseErrorMsg, setDiagnoseErrorMsg] = useState<string | null>(null);
   const { mutate: applyPatch, isPending: isApplyingPatch, isSuccess: patchApplied } = useApplyPatch();
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // ESC key to close fullscreen
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsFullscreen(false);
+    };
+    if (isFullscreen) {
+      window.addEventListener('keydown', handleEsc);
+      return () => window.removeEventListener('keydown', handleEsc);
+    }
+  }, [isFullscreen]);
 
   const filteredSessions = useMemo(() => {
     if (!sessions) return [];
@@ -66,24 +140,32 @@ export default function Dashboard() {
   }, [events.length]);
 
   const currentEventIndex = events.length === 0 ? -1 : Math.min(
-    Math.floor((scrubberValue[0] / 100) * (events.length - 1)),
+    Math.round((scrubberValue[0] / 100) * (events.length - 1)),
     events.length - 1
   );
 
   const currentEvent = currentEventIndex >= 0 ? events[currentEventIndex] : null;
 
   const screenshotUrl = currentEvent?.has_screenshot
-    ? `http://localhost:8000/api/v1/traces/events/${currentEvent.id}/screenshot`
+    ? `${API_BASE_URL}/api/v1/traces/events/${currentEvent.id}/screenshot`
     : null;
+
+  // Count events with screenshots for UI hint
+  const eventsWithScreenshots = useMemo(() =>
+    events.filter(e => e.has_screenshot).map(e => events.indexOf(e) + 1),
+    [events]
+  );
 
   const handleDiagnose = (eventId: number) => {
     setDiagnosingEventId(eventId);
+    setDiagnoseErrorMsg(null);
     runDiagnose(eventId, {
       onSuccess: (data) => {
         setActiveDiagnosis(data);
         setDiagnosingEventId(null);
       },
-      onError: () => {
+      onError: (error) => {
+        setDiagnoseErrorMsg(error instanceof Error ? error.message : "Diagnosis failed");
         setDiagnosingEventId(null);
       }
     });
@@ -124,8 +206,17 @@ export default function Dashboard() {
         <ScrollArea className="flex-1 px-2">
           <div className="space-y-1 py-2">
             {sessionsLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+              <SessionSkeleton />
+            ) : sessionsError ? (
+              <div className="text-center py-8 space-y-3">
+                <AlertCircle className="w-6 h-6 text-red-500 mx-auto" />
+                <p className="text-slate-500 text-xs font-mono">Failed to load sessions</p>
+                <button
+                  onClick={() => refetchSessions()}
+                  className="px-3 py-1 border border-slate-700 text-[10px] font-bold uppercase tracking-wider hover:border-white hover:text-white transition-colors"
+                >
+                  Retry
+                </button>
               </div>
             ) : filteredSessions.length === 0 ? (
               <div className="text-center py-8 text-slate-500 text-sm font-mono">
@@ -160,6 +251,19 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Diagnosis Error Toast */}
+        {diagnoseErrorMsg && (
+          <div className="absolute top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 bg-red-950 border border-red-800 text-red-400 text-xs font-mono animate-in slide-in-from-top-2">
+            <AlertCircle className="w-4 h-4" />
+            <span>{diagnoseErrorMsg}</span>
+            <button
+              onClick={() => setDiagnoseErrorMsg(null)}
+              className="p-1 hover:text-white transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
         {/* Scrubber Area */}
         <header className="h-20 border-b border-slate-900 flex flex-col justify-center px-6 bg-black z-10 shrink-0">
           <div className="flex justify-between items-center mb-2">
@@ -201,6 +305,11 @@ export default function Dashboard() {
                     event={event}
                     onDiagnose={() => handleDiagnose(event.id)}
                     isDiagnosing={diagnosingEventId === event.id}
+                    onSelect={() => {
+                      // Jump scrubber to this event
+                      const newValue = events.length <= 1 ? 100 : Math.round((idx / (events.length - 1)) * 100);
+                      setScrubberValue([newValue]);
+                    }}
                   />
                 ))}
               </div>
@@ -211,15 +320,36 @@ export default function Dashboard() {
           <div className={`bg-black transition-all duration-300 ${activeDiagnosis ? 'w-2/3 flex flex-row' : 'w-1/2'}`}>
             {/* Visual State (always visible, but shrinks when diagnosing) */}
             <div className={`p-8 flex flex-col items-center justify-center relative group ${activeDiagnosis ? 'w-1/2 border-r border-slate-900' : 'w-full'}`}>
-              <div className="absolute top-4 left-4 text-[10px] font-mono text-slate-500 uppercase tracking-widest">Visual State</div>
+              <div className="absolute top-4 left-4 text-[10px] font-mono text-slate-400 uppercase tracking-widest">Visual State</div>
 
               <div className="relative w-full max-w-2xl">
-                <Card className="w-full aspect-video bg-black border-slate-700 rounded-none overflow-hidden flex items-center justify-center relative shadow-none">
+                <Card className="w-full aspect-video bg-black border-slate-700 rounded-none overflow-hidden flex flex-col items-center justify-center relative shadow-none">
                   {screenshotUrl ? (
-                    <img src={screenshotUrl} alt="Visual State" className="w-full h-full object-contain" />
+                    <>
+                      <img
+                        src={screenshotUrl}
+                        alt="Visual State"
+                        className="w-full h-full object-contain cursor-pointer"
+                        onClick={() => setIsFullscreen(true)}
+                      />
+                      <button
+                        onClick={() => setIsFullscreen(true)}
+                        className="absolute bottom-2 right-2 p-1.5 bg-black/80 border border-slate-700 text-slate-400 hover:text-white hover:border-white transition-colors"
+                      >
+                        <Maximize2 className="w-4 h-4" />
+                      </button>
+                    </>
                   ) : (
-                    <div className="text-slate-500 font-mono text-sm uppercase tracking-tighter">
-                      {events.length > 0 ? "[ NO VISUAL_DATA ]" : "[ STANDBY ]"}
+                    <div className="text-center">
+                      <div className="text-slate-500 font-mono text-sm uppercase tracking-tighter">
+                        {events.length > 0 ? "[ NO VISUAL FOR THIS EVENT ]" : "[ STANDBY ]"}
+                      </div>
+                      {eventsWithScreenshots.length > 0 && (
+                        <div className="mt-3 text-slate-600 text-xs font-mono">
+                          <Camera className="w-3 h-3 inline mr-1" />
+                          Screenshots on events: {eventsWithScreenshots.join(", ")}
+                        </div>
+                      )}
                     </div>
                   )}
                   <div className="absolute top-2 right-2 px-2 py-1 bg-black/80 border border-slate-700 text-[9px] font-mono text-white">
@@ -336,7 +466,40 @@ export default function Dashboard() {
           </div>
         </div>
       </main>
+
+      {/* Fullscreen Screenshot Modal */}
+      {isFullscreen && screenshotUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4"
+          onClick={() => setIsFullscreen(false)}
+        >
+          <button
+            onClick={() => setIsFullscreen(false)}
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <div className="absolute top-4 left-4 text-xs font-mono text-slate-400">
+            Click anywhere or press ESC to close
+          </div>
+          <img
+            src={screenshotUrl}
+            alt="Visual State (Fullscreen)"
+            className="max-w-full max-h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
+  );
+}
+
+// Main export with Error Boundary wrapper
+export default function Dashboard() {
+  return (
+    <ErrorBoundary>
+      <DashboardContent />
+    </ErrorBoundary>
   );
 }
 
@@ -344,12 +507,14 @@ function StepCard({
   event,
   active,
   onDiagnose,
-  isDiagnosing
+  isDiagnosing,
+  onSelect
 }: {
   event: TraceEvent,
   active: boolean,
   onDiagnose: () => void,
-  isDiagnosing: boolean
+  isDiagnosing: boolean,
+  onSelect: () => void
 }) {
   const getIcon = (type: string) => {
     const t = type.toLowerCase();
@@ -366,27 +531,71 @@ function StepCard({
   const getContent = (event: TraceEvent) => {
     const data = event.event_data;
     if (typeof data === 'string') return data;
-    if (data.action_input) return `Input: ${typeof data.action_input === 'object' ? JSON.stringify(data.action_input) : data.action_input}`;
-    if (data.content) return data.content;
+
+    // Format based on event type for human readability
+    const type = event.event_type.toLowerCase();
+
+    if (type.includes('chain_start')) {
+      const name = data.name || 'Chain';
+      const task = data.inputs?.task || data.inputs?.input || '';
+      return task ? `${name}: "${task}"` : name;
+    }
+
+    if (type.includes('tool_start')) {
+      const tool = data.tool || data.name || 'Tool';
+      const input = data.input || data.action_input || '';
+      return input ? `${tool}: ${input}` : tool;
+    }
+
+    if (type.includes('tool_end')) {
+      return data.output || data.content || 'Completed';
+    }
+
+    if (type.includes('error')) {
+      return data.error || data.message || JSON.stringify(data);
+    }
+
+    // Fallback: try common fields, then JSON
     if (data.output) return data.output;
-    return JSON.stringify(data);
+    if (data.content) return data.content;
+    if (data.message) return data.message;
+
+    return JSON.stringify(data, null, 2);
   };
 
   const isError = event.event_type.toLowerCase().includes('error');
+  const isToolEnd = event.event_type.toLowerCase() === 'tool_end';
+  const isChainStart = event.event_type.toLowerCase() === 'chain_start';
+
+  // Color coding for border based on event type
+  const getBorderColor = () => {
+    if (active) return "border-white";
+    if (isError) return "border-red-800";
+    if (isToolEnd && event.has_screenshot) return "border-blue-800";
+    if (isChainStart) return "border-emerald-800";
+    return "border-slate-700";
+  };
 
   return (
-    <div className={`group relative pl-8 border-l-2 transition-all duration-200 ${active ? "border-white opacity-100" : "border-slate-700 opacity-80 hover:opacity-100"
-      }`}>
+    <div
+      className={`group relative pl-8 border-l-2 transition-all duration-200 cursor-pointer ${getBorderColor()} ${active ? "opacity-100" : "opacity-80 hover:opacity-100"}`}
+      onClick={onSelect}
+    >
       <div className={`absolute -left-2.5 top-0 p-1 translate-y-[-2px] transition-all ${active ? "bg-black scale-110" : "bg-black"
         }`}>
         {getIcon(event.event_type)}
       </div>
       <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <h4 className={`text-[10px] font-bold tracking-widest transition-colors ${active ? "text-white" : "text-slate-300"}`}>
-            {getTitle(event)}
-          </h4>
-          <span className={`text-[9px] font-mono ${active ? "text-slate-300" : "text-slate-500"}`}>
+          <div className="flex items-center gap-2">
+            <h4 className={`text-[10px] font-bold tracking-widest transition-colors ${active ? "text-white" : "text-slate-300"}`}>
+              {getTitle(event)}
+            </h4>
+            {event.has_screenshot && (
+              <Camera className="w-3 h-3 text-blue-400" />
+            )}
+          </div>
+          <span className={`text-[10px] font-mono ${active ? "text-slate-200" : "text-slate-400"}`}>
             {(() => {
               const d = new Date(event.timestamp);
               return isNaN(d.getTime()) ? "Invalid" : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });

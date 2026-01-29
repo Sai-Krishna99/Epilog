@@ -16,10 +16,20 @@ from epilog.db.models import TraceSession, TraceEvent
 
 # Use local postgres from docker
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
+    "DATABASE_URL",
     "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
 )
 API_URL = "http://localhost:8000"
+
+
+def is_api_available():
+    """Check if the API is running."""
+    try:
+        import httpx
+        response = httpx.get(f"{API_URL}/health", timeout=2.0)
+        return response.status_code == 200
+    except Exception:
+        return False
 
 
 @pytest.fixture
@@ -39,6 +49,7 @@ async def db_session(db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not is_api_available(), reason="API not running at localhost:8000")
 async def test_full_trace_flow(db_session):
     """Verify that a full agent trace with a screenshot reaches the database."""
     # 1. Initialize SDK components

@@ -1,6 +1,6 @@
 # Epilog
 
-**Flight recorder and auto-surgeon for AI agents.** Capture execution traces with screenshots, diagnose failures with multimodal AI, and generate code patches automatically.
+**AI-powered debugger for AI agents.** Epilog doesn't just log what happened — it tells you WHY things failed. For browser agents, it captures screenshots to detect visual mismatches.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -9,101 +9,157 @@
 
 ## Why Epilog?
 
-When AI agents fail, traditional debuggers show you text logs. But agents operating in visual environments (browsers, GUIs, documents) fail for *visual* reasons that text logs miss entirely.
+When AI agents fail, traditional tools show you logs. You see "element not found" but not *why*. Was the page different? Did the API change? Is the selector wrong?
 
-**Epilog captures what your agent *saw*, not just what it *said*.**
+**Epilog captures context and uses AI to diagnose the root cause.**
 
-| Traditional Debuggers | Epilog |
-|----------------------|--------|
-| Text logs only | Screenshots + logs |
-| Manual log reading | AI-powered diagnosis |
-| "Figure it out yourself" | Generated code patches |
+| Traditional Tools | Epilog |
+|-------------------|--------|
+| Shows logs | Diagnoses failures |
+| "Figure it out" | "Here's what went wrong" |
+| Text only | Screenshots + logs (for visual agents) |
+
+### Core Value: AI Diagnosis
+
+For **all agents** (API calls, MCP tools, code execution):
+- Event traces capture what the agent did
+- AI analyzes the sequence and identifies failure patterns
+- Diagnosis explains the root cause, not just the symptom
+
+### Enhanced for Visual Agents
+
+For **browser/GUI agents**, Epilog adds:
+- Screenshot capture at each step
+- Visual mismatch detection (expected vs actual)
+- "Agent tried selector X, but page shows Y"
 
 ## Features
 
-- **Trace Capture** — Record agent execution events (tool calls, thoughts, outputs) via LangChain/LangGraph callback handler.
-- **Visual Artifacts** — High-resolution screenshot recording alongside every agent action.
-- **Pro-Grade Dashboard** — Monochrome, minimalist UI with a frame-by-frame timeline scrubber.
-- **Multimodal Diagnosis** — Gemini 3.0 analyzes failures by comparing agent "thoughts" vs "visual reality".
-- **Auto-Surgeon** — Automatic generation of Unified Diff patches based on AI failure analysis.
-- **Local Times** — All logs and dashboards render in your browser-local timezone.
+- **Trace Capture** — Record agent events (tool calls, thoughts, outputs) via LangChain/LangGraph callback handler
+- **Screenshot Artifacts** — Capture what visual agents actually see (optional, via Playwright)
+- **Real-time Dashboard** — Monitor agent runs live with SSE streaming
+- **AI Diagnosis** — Gemini analyzes failures using full context (traces + screenshots)
+- **Visual Mismatch Detection** — Compare agent expectations vs visual reality
+- **Patch Generation** — Auto-generate code fixes based on diagnosis
 
 ## Quick Start
 
-### 1. Prerequisites
+### Option 1: Docker Compose (Recommended)
 
+```bash
+# Clone and configure
+git clone https://github.com/Sai-Krishna99/Epilog.git
+cd Epilog
+cp .env.example .env  # Add your GOOGLE_API_KEY
+
+# Start everything
+docker-compose up -d
+
+# Open dashboard
+open http://localhost:3000
+```
+
+### Option 2: Local Development
+
+**Prerequisites:**
 - Python 3.11+
 - PostgreSQL (or Docker)
-- Node.js 18+ (for dashboard)
-- Gemini API Key (Vertex AI or standard)
-
-### 2. Installation
+- Node.js 20+
+- Google API Key (for Gemini)
 
 ```bash
 # Clone and install
 git clone https://github.com/Sai-Krishna99/Epilog.git
 cd Epilog
 uv sync
-```
 
-### 3. Start the Platform
+# Start PostgreSQL
+docker run -d --name epilog-postgres \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=epilog \
+  -p 5432:5432 postgres:16
 
-```bash
-# Terminal 1: Backend
+# Run migrations
+export DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/epilog"
+uv run alembic upgrade head
+
+# Terminal 1: API
 uv run uvicorn epilog.api.main:app --reload
 
 # Terminal 2: Dashboard
-cd epilog-web
-npm run dev
+cd epilog-web && npm install && npm run dev
 ```
 
-### 4. Run the Multimodal Demo
-
-We've provided a "broken" patient agent demo to show Epilog in action.
+### Run the Demo
 
 ```bash
-# Terminal 3: Demo
-uv run python patient_agent.py
+# Terminal 3: Demo agent (intentionally fails)
+uv run python real_demo_agent.py
 ```
 
-Go to `http://localhost:3000`, select the **"Patient Agent Demo"** session, and click **DIAGNOSE** on the error event to see the Auto-Surgeon fix the code.
+1. Open http://localhost:3000
+2. Select "Real Demo - HN Scraper (Wrong Selector)"
+3. Scrub to an event with a camera icon (has screenshot)
+4. Click **DIAGNOSE** to see AI analysis
 
 ## Architecture
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │   Your Agent    │────▶│   Epilog SDK    │────▶│   Epilog API    │
-│  (LangGraph)    │     │ (CallbackHandler)│     │   (FastAPI)     │
+│ (LangChain/etc) │     │ (CallbackHandler)│     │   (FastAPI)     │
 └─────────────────┘     └─────────────────┘     └────────┬────────┘
                                                          │
                         ┌─────────────────┐     ┌────────▼────────┐
                         │    Dashboard    │◀────│   PostgreSQL    │
-                        │    (Next.js)    │     │                 │
+                        │    (Next.js)    │ SSE │                 │
                         └────────┬────────┘     └─────────────────┘
                                  │
                         ┌────────▼────────┐
-                        │  Gemini Vision  │
+                        │  Gemini Flash   │
                         │   (Diagnosis)   │
                         └─────────────────┘
 ```
 
 ## Configuration
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `GEMINI_API_KEY` | Google AI API key |
-| `EPILOG_DIAGNOSIS_MODEL` | Gemini model for analysis (Default: `gemini-3-flash-preview`) |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | Required |
+| `GOOGLE_API_KEY` | Google AI API key for Gemini | Required for diagnosis |
+| `EPILOG_DIAGNOSIS_MODEL` | Gemini model for analysis | `gemini-2.0-flash` |
+| `NEXT_PUBLIC_API_URL` | API URL for frontend | `http://localhost:8000` |
 
-## Roadmap
+## SDK Usage
 
-- [x] Trace ingestion API
-- [x] PostgreSQL storage with async SQLAlchemy
-- [x] SDK callback handler for LangChain/LangGraph
-- [x] Visual artifact capture (generic & playwright)
-- [x] Timeline dashboard
-- [x] Gemini multimodal diagnosis
-- [x] Patch generation
+```python
+from epilog.sdk import EpilogCallbackHandler, ScreenshotCapture
+
+# For any agent (no screenshots)
+handler = EpilogCallbackHandler(
+    api_base_url="http://localhost:8000",
+    session_name="My Agent Run"
+)
+
+# For browser agents (with screenshots)
+async with ScreenshotCapture(headless=True) as capture:
+    handler = EpilogCallbackHandler(
+        api_base_url="http://localhost:8000",
+        session_name="Browser Agent",
+        screenshot_capture=capture
+    )
+
+    # Use with LangChain
+    chain.invoke({"input": "..."}, config={"callbacks": [handler]})
+
+    # Or call methods directly
+    await handler.on_tool_end_with_screenshot(
+        output="Clicked button",
+        run_id=run_id,
+        url="https://example.com"
+    )
+```
 
 ## License
 
@@ -111,4 +167,4 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
-**Agents break. Epilog fixes them.**
+**Agents break. Epilog explains why.**

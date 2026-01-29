@@ -100,16 +100,16 @@ class ScreenshotCapture:
             await self._playwright.stop()
 
     async def capture_url(
-        self, 
-        url: str, 
-        wait_until: str = "networkidle", 
+        self,
+        url: str,
+        wait_until: str = "load",
         full_page: bool = False
     ) -> bytes:
         """Navigate to a URL and capture a compressed screenshot.
 
         Args:
             url: The URL to capture
-            wait_until: Playwright wait strategy
+            wait_until: Playwright wait strategy ('load', 'domcontentloaded', 'networkidle')
             full_page: Whether to capture the full scrolling page
 
         Returns:
