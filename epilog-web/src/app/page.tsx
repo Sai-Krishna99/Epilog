@@ -20,7 +20,9 @@ import {
   RefreshCw,
   Camera,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -107,6 +109,7 @@ function DashboardContent() {
   const [diagnoseErrorMsg, setDiagnoseErrorMsg] = useState<string | null>(null);
   const { mutate: applyPatch, isPending: isApplyingPatch, isSuccess: patchApplied } = useApplyPatch();
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showRawMetadata, setShowRawMetadata] = useState(false);
 
   // ESC key to close fullscreen
   useEffect(() => {
@@ -371,9 +374,11 @@ function DashboardContent() {
                       {currentEvent?.run_id ? `run: ${currentEvent.run_id.slice(0, 8)}` : "no active run"}
                     </span>
                   </div>
-                  <pre className="text-[10px] text-slate-400 font-mono overflow-auto max-h-32 scrollbar-hide">
-                    {JSON.stringify(currentEvent?.event_data || {}, null, 2)}
-                  </pre>
+                  <MetadataDisplay
+                    data={currentEvent?.event_data || {}}
+                    showRaw={showRawMetadata}
+                    onToggleRaw={() => setShowRawMetadata(!showRawMetadata)}
+                  />
                 </div>
               )}
             </div>
@@ -500,6 +505,105 @@ export default function Dashboard() {
     <ErrorBoundary>
       <DashboardContent />
     </ErrorBoundary>
+  );
+}
+
+function MetadataDisplay({
+  data,
+  showRaw,
+  onToggleRaw
+}: {
+  data: Record<string, unknown>,
+  showRaw: boolean,
+  onToggleRaw: () => void
+}) {
+  const formatValue = (value: unknown): string => {
+    if (value === null || value === undefined) return "-";
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (typeof value === "object") {
+      // For nested objects, show a summary
+      const keys = Object.keys(value as object);
+      if (keys.length === 0) return "{}";
+      if (keys.length <= 2) {
+        // Try to show small objects inline
+        const str = JSON.stringify(value);
+        return str.length <= 50 ? str : `{${keys.length} fields}`;
+      }
+      return `{${keys.length} fields}`;
+    }
+    return String(value);
+  };
+
+  const getKeyValuePairs = (obj: Record<string, unknown>): Array<{ key: string; value: string }> => {
+    const commonKeys = ["tool", "name", "input", "output", "error", "message", "content", "url", "selector"];
+    const pairs: Array<{ key: string; value: string }> = [];
+
+    // First add common keys if they exist
+    for (const key of commonKeys) {
+      if (key in obj && obj[key] !== undefined) {
+        pairs.push({ key, value: formatValue(obj[key]) });
+      }
+    }
+
+    // Then add remaining keys
+    for (const key of Object.keys(obj)) {
+      if (!commonKeys.includes(key) && obj[key] !== undefined) {
+        pairs.push({ key, value: formatValue(obj[key]) });
+      }
+    }
+
+    return pairs;
+  };
+
+  const pairs = getKeyValuePairs(data);
+  const isEmpty = pairs.length === 0;
+
+  return (
+    <div className="space-y-2">
+      {!isEmpty && !showRaw && (
+        <div className="space-y-1.5">
+          {pairs.slice(0, 6).map(({ key, value }) => (
+            <div key={key} className="flex items-start gap-3 text-[10px] font-mono">
+              <span className="text-slate-500 min-w-[60px] uppercase">{key}</span>
+              <span className="text-slate-300 break-all">{value}</span>
+            </div>
+          ))}
+          {pairs.length > 6 && (
+            <div className="text-[10px] font-mono text-slate-500 italic">
+              +{pairs.length - 6} more fields
+            </div>
+          )}
+        </div>
+      )}
+
+      {showRaw && (
+        <pre className="text-[10px] text-slate-400 font-mono overflow-auto max-h-32 scrollbar-hide bg-slate-950/50 p-2 border border-slate-800">
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      )}
+
+      {isEmpty && !showRaw && (
+        <div className="text-[10px] text-slate-500 font-mono italic">No metadata</div>
+      )}
+
+      <button
+        onClick={onToggleRaw}
+        className="flex items-center gap-1 text-[9px] font-mono text-slate-500 hover:text-slate-300 transition-colors uppercase tracking-wider"
+      >
+        {showRaw ? (
+          <>
+            <ChevronUp className="w-3 h-3" />
+            Hide raw JSON
+          </>
+        ) : (
+          <>
+            <ChevronDown className="w-3 h-3" />
+            Show raw JSON
+          </>
+        )}
+      </button>
+    </div>
   );
 }
 
