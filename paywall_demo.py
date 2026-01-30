@@ -1,10 +1,12 @@
 """
-Paywall Demo: Medium Article Scraper
-====================================
-This demo shows a real failure - Medium's paywall blocks full article access.
+Bot Detection Demo: Medium Article Scraper
+==========================================
+This demo shows a real failure - bot detection/Cloudflare blocks access.
 
-The agent navigates to a Medium article, captures a screenshot (showing paywall),
-then actually tries to extract full content - which fails or returns partial content.
+The agent navigates to a Medium article, but gets stopped by a
+"Just a moment..." Cloudflare challenge page instead of the actual content.
+
+This is a common failure mode for web scraping agents.
 
 Usage:
     uv run python paywall_demo.py
@@ -28,7 +30,7 @@ async def main():
     async with ScreenshotCapture(headless=True) as capture:
         handler = EpilogCallbackHandler(
             api_base_url="http://localhost:8000",
-            session_name="Paywall Demo - Medium Scraper",
+            session_name="Bot Detection Demo - Medium Scraper",
             screenshot_capture=capture,
         )
 

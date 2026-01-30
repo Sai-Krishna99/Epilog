@@ -71,7 +71,9 @@ async def main():
         )
 
         try:
-            await page.goto(TARGET_URL, wait_until="load", timeout=30000)
+            await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=30000)
+            # Wait for redirects to settle
+            await page.wait_for_load_state("networkidle", timeout=10000)
             title = await page.title()
             print(f"Page loaded: {title}")
 
