@@ -91,17 +91,25 @@ uv run uvicorn epilog.api.main:app --reload
 cd epilog-web && npm install && npm run dev
 ```
 
-### Run the Demo
+### Run the Demos
 
 ```bash
-# Terminal 3: Demo agent (intentionally fails)
+# Demo 1: Cookie consent modal blocking content (most dramatic)
+uv run python cookie_popup_demo.py
+
+# Demo 2: LinkedIn login wall blocking profile access
+uv run python login_wall_demo.py
+
+# Demo 3: HN scraper with outdated selector
 uv run python real_demo_agent.py
 ```
 
 1. Open http://localhost:3000
-2. Select "Real Demo - HN Scraper (Wrong Selector)"
+2. Select a session from the sidebar
 3. Scrub to an event with a camera icon (has screenshot)
 4. Click **DIAGNOSE** to see AI analysis
+
+Each demo shows a different failure scenario where the screenshot immediately reveals what went wrong.
 
 ## Architecture
 
