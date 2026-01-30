@@ -94,14 +94,14 @@ cd epilog-web && npm install && npm run dev
 ### Run the Demos
 
 ```bash
-# Demo 1: Cookie consent modal blocking content (most dramatic)
-uv run python cookie_popup_demo.py
+# Before/After comparison - shows traditional debugging first
+uv run python before_epilog_demo.py  # Traditional (no Epilog)
+uv run python cookie_popup_demo.py   # With Epilog - see the difference!
 
-# Demo 2: LinkedIn login wall blocking profile access
-uv run python login_wall_demo.py
-
-# Demo 3: HN scraper with outdated selector
-uv run python real_demo_agent.py
+# More failure scenarios
+uv run python login_wall_demo.py     # LinkedIn auth wall
+uv run python paywall_demo.py        # Medium subscription wall
+uv run python real_demo_agent.py     # HN scraper wrong selector
 ```
 
 1. Open http://localhost:3000
@@ -109,7 +109,12 @@ uv run python real_demo_agent.py
 3. Scrub to an event with a camera icon (has screenshot)
 4. Click **DIAGNOSE** to see AI analysis
 
-Each demo shows a different failure scenario where the screenshot immediately reveals what went wrong.
+| Demo | Failure Type | What Screenshot Shows |
+|------|-------------|----------------------|
+| Cookie Popup | GDPR modal | Privacy consent covering page |
+| Login Wall | Auth required | "Sign in to view" page |
+| Paywall | Subscription | "Member-only story" block |
+| HN Scraper | Wrong selector | Page looks fine, selector outdated |
 
 ## Architecture
 
