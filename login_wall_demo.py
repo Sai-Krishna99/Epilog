@@ -31,7 +31,7 @@ from epilog.sdk import EpilogCallbackHandler, ScreenshotCapture
 
 
 # Use a public profile URL (LinkedIn will redirect to login anyway)
-TARGET_URL = "https://www.linkedin.com/in/satya-nadella-3145136/"
+TARGET_URL = "https://www.linkedin.com/in/sundarpichai/"
 PROFILE_NAME_SELECTOR = ".text-heading-xlarge"
 
 
