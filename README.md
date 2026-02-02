@@ -135,13 +135,44 @@ uv run python real_demo_agent.py     # HN scraper wrong selector
                         └─────────────────┘
 ```
 
-## Configuration
+## Environment Setup
+
+### 1. Get a Google AI Studio API Key (Free)
+
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Click "Create API Key"
+3. Copy the key (starts with `AIza...`)
+
+### 2. Configure Environment Variables
+
+**Backend (.env in project root):**
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add:
+```bash
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/epilog
+GOOGLE_API_KEY=your_api_key_here   # From Google AI Studio
+```
+
+**Frontend (optional - only needed for WSL2 users):**
+
+If you're on WSL2 and the UI can't connect to the backend, create `epilog-web/.env.local`:
+```bash
+# Get your WSL IP with: hostname -I
+NEXT_PUBLIC_API_URL=http://YOUR_WSL_IP:8000
+```
+
+Mac/Linux users don't need this - `localhost:8000` works by default.
+
+## Configuration Reference
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | Required |
-| `GOOGLE_API_KEY` | Google AI API key for Gemini | Required for diagnosis |
-| `EPILOG_DIAGNOSIS_MODEL` | Gemini model for analysis | `gemini-2.0-flash` |
+| `GOOGLE_API_KEY` | Google AI Studio API key | Required for diagnosis |
+| `EPILOG_DIAGNOSIS_MODEL` | Gemini model for analysis | `gemini-3-flash-preview` |
 | `NEXT_PUBLIC_API_URL` | API URL for frontend | `http://localhost:8000` |
 
 ## SDK Usage

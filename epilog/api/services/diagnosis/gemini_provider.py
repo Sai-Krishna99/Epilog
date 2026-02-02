@@ -8,41 +8,32 @@ from .provider import BaseDiagnosisProvider, DiagnosisReport
 class GeminiProvider(BaseDiagnosisProvider):
     def __init__(self, api_key: str):
         self.api_key = api_key
-        # The user's curl test proved that gemini-3-flash-preview on aiplatform works with this key.
+        # Using Google AI Studio endpoint (free tier)
         self.diagnosis_model_name = os.getenv("EPILOG_DIAGNOSIS_MODEL", "gemini-3-flash-preview")
         self.patch_model_name = os.getenv("EPILOG_PATCH_MODEL", "gemini-3-flash-preview")
-        self.base_url = "https://aiplatform.googleapis.com/v1/publishers/google/models"
+        self.base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
     async def _generate_content(self, model: str, parts: List[Dict[str, Any]], response_mime_type: Optional[str] = None) -> str:
-        # Using streamGenerateContent to match user's successful curl exactly
-        url = f"{self.base_url}/{model}:streamGenerateContent?key={self.api_key}"
-        
+        url = f"{self.base_url}/{model}:generateContent"
+
         payload = {
             "contents": [{"role": "user", "parts": parts}]
         }
-        
-        if response_mime_type == "application/json":
-            # For Vertex AI keys via this endpoint, we might have to be careful with system instructions,
-            # but we'll stick to the basic payload for consistency with the user's curl.
-            pass
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-goog-api-key": self.api_key
+        }
 
         async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, json=payload, headers=headers)
             if response.status_code != 200:
                 raise Exception(f"Gemini API Error {response.status_code}: {response.text}")
-            
+
             data = response.json()
             try:
-                # streamGenerateContent returns a list of objects
-                # We aggregate all candidates from all items in the list
-                full_text = ""
-                if isinstance(data, list):
-                    for item in data:
-                        if "candidates" in item and item["candidates"]:
-                            full_text += item["candidates"][0]["content"]["parts"][0]["text"]
-                else:
-                    full_text = data["candidates"][0]["content"]["parts"][0]["text"]
-                
+                # generateContent returns a single object with candidates
+                full_text = data["candidates"][0]["content"]["parts"][0]["text"]
                 return full_text
             except (KeyError, IndexError) as e:
                 raise Exception(f"Unexpected response format: {str(e)} - Raw: {response.text[:200]}")

@@ -291,10 +291,10 @@ function DashboardContent() {
         </header>
 
         {/* Workspace: Feed & Preview */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-h-0">
           {/* Trace Feed */}
-          <div className={`border-r border-slate-900 flex flex-col bg-black overflow-hidden transition-all duration-300 ${activeDiagnosis ? 'w-1/3' : 'w-1/2'}`}>
-            <ScrollArea className="flex-1">
+          <div className={`border-r border-slate-900 flex flex-col bg-black overflow-hidden min-h-0 transition-all duration-300 ${activeDiagnosis ? 'w-1/3' : 'w-1/2'}`}>
+            <ScrollArea className="flex-1 h-full">
               <div className="p-6 max-w-2xl mx-auto space-y-8 pb-32">
                 {events.length === 0 ? (
                   <div className="h-64 flex flex-col items-center justify-center text-slate-500 text-sm font-mono border border-dashed border-slate-700">
